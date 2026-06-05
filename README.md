@@ -1,17 +1,18 @@
-# vscode.nvim
+# nvim-workspace
 
-`vscode.nvim` is a Neovim plugin that emulates the Visual Studio Code Extension API namespaces in Lua. It exposes a global `vscode` object that allows user configurations, scripts, and other plugins to query workspace folders, read workspace configuration settings (supporting `.code-workspace` JSONC files), spawn terminals, prompt messages, and register command or document lifecycle listeners exactly like VS Code extensions.
+`nvim-workspace` is a Neovim plugin that emulates the Visual Studio Code Multi-Root Workspace model in Lua. It exposes a global `workspace` object that allows user configurations, scripts, and other plugins to query workspace folders, read workspace configuration settings (supporting `.code-workspace` JSONC files), spawn terminals, prompt messages, and register command or document lifecycle listeners natively.
 
 ---
 
 ## Features
 
-- **Global `vscode` Variable**: Provides 1-to-1 matching namespaces (`vscode.Uri`, `vscode.workspace`, `vscode.window`, `vscode.commands`) inside Neovim Lua.
-- **VS Code Workspaces**: Parses and loads `.code-workspace` files (JSONC) to set up multi-root workspaces.
+- **Global `workspace` Variable**: Provides 1-to-1 matching namespaces (`workspace.Uri`, `workspace.workspace`, `workspace.window`, `workspace.commands`) inside Neovim Lua.
+- **VS Code Workspaces Compatibility**: Parses and loads `.code-workspace` files (JSONC) to set up multi-root workspaces.
 - **LSP Dynamic Syncing**: Automatically registers workspace folders to running LSP clients (supporting `gopls`, `vtsls`, `pyright`, etc.) for workspace-wide indexing.
-- **Integrated Terminal Creator**: Emulates `vscode.window.createTerminal`, opening split or floating windows running shells in workspace roots.
+- **Integrated Terminal Creator**: Emulates `workspace.window.createTerminal`, opening split or floating windows running shells in workspace roots.
 - **Clean Event Lifecycle**: Bridges Neovim's autocmds into event lists (like `onDidOpenTextDocument`, `onDidChangeTextDocument`, and `onDidSaveTextDocument`) with clean, disposable event handlers.
 - **Settings Configuration**: Scopes setting values using `.get()` and `.has()` from `.code-workspace` files.
+- **Transparent Search Hijacking**: Intercepts Telescope, Fzf-lua, and Snacks.picker calls to automatically search all workspace folders.
 
 ---
 
@@ -21,12 +22,13 @@
 
 ```lua
 {
-  "austinbrees/vscode.nvim",
+  "austinbrees/nvim-workspace",
   config = function()
-    require("vscode").setup({
+    require("workspace").setup({
       terminal_position = "horizontal", -- "horizontal" | "vertical" | "tab" | "float"
       terminal_size = 15,                -- Size of terminal window split
       auto_lsp = true,                   -- Sync workspace folders to active LSP servers
+      hijack_search = true,              -- Intercept and search across all workspace folders automatically
     })
   end
 }
@@ -50,51 +52,51 @@
 
 ## API Reference & Usage
 
-The emulated `vscode` object behaves just like the JS/TS counterpart:
+The emulated `workspace` object behaves just like the JS/TS counterpart:
 
-### `vscode.Uri`
+### `workspace.Uri`
 
 Handles URI schemas, file paths, and cross-platform formatting.
 
 ```lua
 -- Create file URI
-local uri = vscode.Uri.file("/Users/user/project/main.lua")
+local uri = workspace.Uri.file("/Users/user/project/main.lua")
 print(uri.scheme) -- "file"
 print(uri.path)   -- "/Users/user/project/main.lua"
 print(uri.fsPath) -- "/Users/user/project/main.lua"
 
 -- Parse arbitrary URI string
-local raw_uri = vscode.Uri.parse("file:///Users/user/project/main.lua#L20?q=test")
+local raw_uri = workspace.Uri.parse("file:///Users/user/project/main.lua#L20?q=test")
 print(raw_uri.fragment) -- "L20"
 print(raw_uri.query)    -- "q=test"
 ```
 
-### `vscode.workspace`
+### `workspace.workspace`
 
 Manage multi-root directories, configurations, document queries, and event registrations.
 
 ```lua
 -- Get workspace state
-local name = vscode.workspace.name
-local file = vscode.workspace.workspaceFile -- Uri object or nil
-local folders = vscode.workspace.workspaceFolders -- Array of folders {uri, name, index}
+local name = workspace.workspace.name
+local file = workspace.workspace.workspaceFile -- Uri object or nil
+local folders = workspace.workspace.workspaceFolders -- Array of folders {uri, name, index}
 
 -- Retrieve scoped configuration (defined in .code-workspace settings block)
-local editor_config = vscode.workspace.getConfiguration("editor")
+local editor_config = workspace.workspace.getConfiguration("editor")
 local tab_size = editor_config.get("tabSize") -- 2
 local format_on_save = editor_config.has("formatOnSave") -- true
 
 -- Resolve containing folder of a file
-local folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file("/path/to/project/main.lua"))
+local folder = workspace.workspace.getWorkspaceFolder(workspace.Uri.file("/path/to/project/main.lua"))
 
 -- Convert path to relative path
-local rel_path = vscode.workspace.asRelativePath("/path/to/project/src/index.js", false) -- "src/index.js"
+local rel_path = workspace.workspace.asRelativePath("/path/to/project/src/index.js", false) -- "src/index.js"
 
 -- Find files using glob pattern
-local files = vscode.workspace.findFiles("**/*.lua") -- returns list of Uri objects
+local files = workspace.workspace.findFiles("**/*.lua") -- returns list of Uri objects
 
 -- Register document events (returns a disposable handle)
-local disposable = vscode.workspace.onDidOpenTextDocument(function(document)
+local disposable = workspace.workspace.onDidOpenTextDocument(function(document)
   print("Document opened: " .. document.fileName)
   print("Language: " .. document.languageId)
 end)
@@ -103,15 +105,15 @@ end)
 disposable.dispose()
 ```
 
-### `vscode.window`
+### `workspace.window`
 
 Manages terminal windows, active text buffers, and message modals.
 
 ```lua
 -- Create and run a terminal inside a specific workspace directory
-local term = vscode.window.createTerminal({
+local term = workspace.window.createTerminal({
   name = "Build Server",
-  cwd = vscode.Uri.file("/Users/user/project/backend"),
+  cwd = workspace.Uri.file("/Users/user/project/backend"),
   shellPath = "/bin/zsh",
   env = { PORT = "8080" }
 })
@@ -126,32 +128,32 @@ term:sendText("npm run dev")
 term:dispose()
 
 -- Query active editor buffer
-local editor = vscode.window.activeTextEditor
+local editor = workspace.window.activeTextEditor
 if editor then
   print("Active buffer path: " .. editor.document.fileName)
   print("Cursor coordinates: line " .. editor.selection.active.line .. ", char " .. editor.selection.active.character)
 end
 
 -- Show an interactive notification with selection options (returns a Promise-like object)
-vscode.window.showInformationMessage("Select your layout", "Grid", "List"):then(function(choice)
+workspace.window.showInformationMessage("Select your layout", "Grid", "List"):then(function(choice)
   if choice == "Grid" then
     print("User chose Grid!")
   end
 end)
 ```
 
-### `vscode.commands`
+### `workspace.commands`
 
 Register and execute custom commands programmatically.
 
 ```lua
 -- Register a custom command
-local disp = vscode.commands.registerCommand("extension.sayHello", function(name)
+local disp = workspace.commands.registerCommand("extension.sayHello", function(name)
   vim.notify("Hello " .. (name or "World"))
 end)
 
 -- Execute command
-vscode.commands.executeCommand("extension.sayHello", "Austin")
+workspace.commands.executeCommand("extension.sayHello", "Austin")
 
 -- Unregister command
 disp.dispose()

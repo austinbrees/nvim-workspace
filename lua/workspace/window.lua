@@ -1,6 +1,6 @@
 local M = {}
 
-local Uri = require("vscode.uri")
+local Uri = require("workspace.uri")
 
 local Terminal = {}
 
@@ -56,8 +56,8 @@ function Terminal.new(options)
     
     local win = vim.fn.bufwinid(self.bufnr)
     if win == -1 then
-      local position = _G.vscode_config and _G.vscode_config.terminal_position or "horizontal"
-      local size = _G.vscode_config and _G.vscode_config.terminal_size or 15
+      local position = _G.workspace_config and _G.workspace_config.terminal_position or "horizontal"
+      local size = _G.workspace_config and _G.workspace_config.terminal_size or 15
       
       if position == "vertical" then
         vim.cmd("vertical " .. size .. "new")
@@ -174,7 +174,7 @@ local get_active_editor_meta = {
         return nil
       end
       local path = vim.api.nvim_buf_get_name(bufnr)
-      local workspace = require("vscode.workspace")
+      local workspace = require("workspace.workspace")
       local doc = workspace.create_text_document(bufnr, path)
       
       local cursor = vim.api.nvim_win_get_cursor(0)

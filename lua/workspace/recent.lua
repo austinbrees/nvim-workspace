@@ -1,7 +1,7 @@
 local M = {}
 
-local utils = require("vscode.utils")
-local history_file = vim.fn.stdpath("data") .. "/vscode-workspace-recent.json"
+local utils = require("workspace.utils")
+local history_file = vim.fn.stdpath("data") .. "/workspace-recent.json"
 
 --- Get the list of recently loaded workspace paths.
 ---@return table Array of string paths

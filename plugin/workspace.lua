@@ -1,26 +1,26 @@
--- Ensure vscode is initialized with default config if not done yet
-if not _G.vscode then
-  pcall(require, "vscode")
-  if _G.vscode == nil then
+-- Ensure workspace is initialized with default config if not done yet
+if not _G.workspace then
+  pcall(require, "workspace")
+  if _G.workspace == nil then
     -- Fallback in case of load order issues
-    require("vscode").setup({})
+    require("workspace").setup({})
   end
 end
 
 -- LSP Sync folders helper
 local function sync_lsp_folders(bufnr)
-  if not _G.vscode or not _G.vscode.workspace or not _G.vscode.workspace.workspaceFolders then
+  if not _G.workspace or not _G.workspace.workspace or not _G.workspace.workspace.workspaceFolders then
     return
   end
-  if not _G.vscode_config or not _G.vscode_config.auto_lsp then
+  if not _G.workspace_config or not _G.workspace_config.auto_lsp then
     return
   end
   
-  local folders = _G.vscode.workspace.workspaceFolders
+  local folders = _G.workspace.workspace.workspaceFolders
   if not folders or #folders <= 1 then
     -- Skip syncing if only a single default CWD folder is present,
     -- unless we explicitly loaded a .code-workspace file
-    if not _G.vscode.workspace.workspaceFile then
+    if not _G.workspace.workspace.workspaceFile then
       return
     end
   end
@@ -47,8 +47,8 @@ end
 
 -- Load Workspace function
 local function load_workspace(path)
-  local ws = _G.vscode.workspace
-  local recent = require("vscode.recent")
+  local ws = _G.workspace.workspace
+  local recent = require("workspace.recent")
   
   if path and path ~= "" then
     local success, err = ws.load(path)
@@ -111,10 +111,10 @@ local function load_workspace(path)
   end
 end
 
--- VSCode Open Workspace Command
+-- Open Workspace Command
 local function open_workspace(path)
-  local ws = _G.vscode.workspace
-  local recent = require("vscode.recent")
+  local ws = _G.workspace.workspace
+  local recent = require("workspace.recent")
   
   if path and path ~= "" then
     local success, err = ws.load(path)
@@ -184,15 +184,15 @@ end, {
   complete = "file"
 })
 
--- VSCode Add Folder Command (Transition to workspace mode if not already)
+-- Add Folder Command (Transition to workspace mode if not already)
 vim.api.nvim_create_user_command("WorkspaceAddFolder", function(opts)
   local path = opts.args
   if not path or path == "" then
     path = vim.fn.getcwd()
   end
-  local success = _G.vscode.workspace.addFolder(path)
+  local success = _G.workspace.workspace.addFolder(path)
   if success then
-    local state_str = _G.vscode.workspace.workspaceFile and "workspace config" or "untitled workspace"
+    local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
     vim.notify(string.format("Added folder to %s: %s", state_str, path), vim.log.levels.INFO)
   else
     vim.notify("Failed to add folder: " .. path, vim.log.levels.ERROR)
@@ -202,16 +202,16 @@ end, {
   complete = "dir"
 })
 
--- VSCode Save Workspace As Command
+-- Save Workspace As Command
 vim.api.nvim_create_user_command("WorkspaceSaveAs", function(opts)
   local path = opts.args
   if not path or path == "" then
     vim.notify("Please specify a path to save the workspace file (e.g. :WorkspaceSaveAs project.code-workspace)", vim.log.levels.ERROR)
     return
   end
-  local success, err = _G.vscode.workspace.save(path)
+  local success, err = _G.workspace.workspace.save(path)
   if success then
-    require("vscode.recent").add(path)
+    require("workspace.recent").add(path)
     vim.notify("Saved workspace config to: " .. path, vim.log.levels.INFO)
   else
     vim.notify("Failed to save workspace: " .. tostring(err), vim.log.levels.ERROR)
@@ -221,15 +221,15 @@ end, {
   complete = "file"
 })
 
--- VSCode Close Workspace Command
+-- Close Workspace Command
 vim.api.nvim_create_user_command("WorkspaceClose", function()
-  _G.vscode.workspace.init_default()
+  _G.workspace.workspace.init_default()
   vim.notify("Closed workspace. Reset to single-folder CWD root.", vim.log.levels.INFO)
 end, {})
 
--- VSCode Workspace Explorer integration (Neo-tree fallback)
+-- Workspace Explorer integration (Neo-tree fallback)
 vim.api.nvim_create_user_command("WorkspaceExplorer", function()
-  local ws = _G.vscode.workspace
+  local ws = _G.workspace.workspace
   local folders = ws.workspaceFolders
   if not folders or #folders == 0 then
     vim.notify("No folders open in workspace.", vim.log.levels.WARN)
@@ -269,9 +269,9 @@ vim.api.nvim_create_user_command("WorkspaceExplorer", function()
   end
 end, {})
 
--- VSCode Workspace Find Files (Telescope integration)
+-- Workspace Find Files (Telescope integration)
 vim.api.nvim_create_user_command("WorkspaceFiles", function()
-  local ws = _G.vscode.workspace
+  local ws = _G.workspace.workspace
   local folders = ws.workspaceFolders
   if not folders or #folders == 0 then
     vim.notify("No folders open in workspace.", vim.log.levels.WARN)
@@ -295,9 +295,9 @@ vim.api.nvim_create_user_command("WorkspaceFiles", function()
   })
 end, {})
 
--- VSCode Workspace Live Grep (Telescope integration)
+-- Workspace Live Grep (Telescope integration)
 vim.api.nvim_create_user_command("WorkspaceGrep", function()
-  local ws = _G.vscode.workspace
+  local ws = _G.workspace.workspace
   local folders = ws.workspaceFolders
   if not folders or #folders == 0 then
     vim.notify("No folders open in workspace.", vim.log.levels.WARN)
@@ -323,16 +323,16 @@ end, {})
 
 
 -- Event Bridge Group
-local event_group = vim.api.nvim_create_augroup("VSCodeEventBridging", { clear = true })
+local event_group = vim.api.nvim_create_augroup("WorkspaceEventBridging", { clear = true })
 
 local function fire_doc_event(bufnr, event_name)
-  if not _G.vscode or not _G.vscode.workspace then return end
+  if not _G.workspace or not _G.workspace.workspace then return end
   if vim.bo[bufnr].buftype ~= "" then return end
   local path = vim.api.nvim_buf_get_name(bufnr)
   if path == "" then return end
   
-  local doc = _G.vscode.workspace.create_text_document(bufnr, path)
-  local ev = _G.vscode.workspace[event_name]
+  local doc = _G.workspace.workspace.create_text_document(bufnr, path)
+  local ev = _G.workspace.workspace[event_name]
   if ev then
     if event_name == "onDidChangeTextDocument" then
       ev.fire({ document = doc })
@@ -382,7 +382,7 @@ vim.api.nvim_create_autocmd("BufDelete", {
 })
 
 -- LSP Attach Sync
-local lsp_group = vim.api.nvim_create_augroup("VSCodeWorkspaceLspAttach", { clear = true })
+local lsp_group = vim.api.nvim_create_augroup("WorkspaceLspAttach", { clear = true })
 vim.api.nvim_create_autocmd("LspAttach", {
   group = lsp_group,
   callback = function(args)

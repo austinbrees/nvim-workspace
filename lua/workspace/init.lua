@@ -7,21 +7,21 @@ M.default_config = {
   hijack_search = true,              -- Hijack Telescope, Fzf-lua, and Snacks.picker automatically
 }
 
---- Setup the plugin configuration and inject global `vscode` variable.
+--- Setup the plugin configuration and inject global `workspace` variable.
 ---@param user_config table? User-provided custom configurations
 function M.setup(user_config)
-  _G.vscode_config = vim.tbl_deep_extend("force", M.default_config, user_config or {})
+  _G.workspace_config = vim.tbl_deep_extend("force", M.default_config, user_config or {})
   
-  -- Expose the global vscode emulation namespace
-  _G.vscode = {
-    Uri = require("vscode.uri"),
-    workspace = require("vscode.workspace"),
-    window = require("vscode.window"),
-    commands = require("vscode.commands"),
+  -- Expose the global workspace emulation namespace
+  _G.workspace = {
+    Uri = require("workspace.uri"),
+    workspace = require("workspace.workspace"),
+    window = require("workspace.window"),
+    commands = require("workspace.commands"),
   }
 
   -- Initialize search hijacking
-  require("vscode.search").setup()
+  require("workspace.search").setup()
 end
 
 return M

@@ -1,7 +1,7 @@
 local M = {}
 
-local Uri = require("vscode.uri")
-local utils = require("vscode.utils")
+local Uri = require("workspace.uri")
+local utils = require("workspace.utils")
 
 -- State variables
 M.workspaceFolders = nil

@@ -1,14 +1,14 @@
 local M = {}
 
 local function hijack_telescope(builtin)
-  if builtin._vscode_hijacked then return end
-  builtin._vscode_hijacked = true
+  if builtin._workspace_hijacked then return end
+  builtin._workspace_hijacked = true
 
   local function wrap_search(orig_func, search_dirs_key)
     return function(opts)
       opts = opts or {}
-      if _G.vscode and _G.vscode.workspace and _G.vscode.workspace.workspaceFolders then
-        local ws = _G.vscode.workspace
+      if _G.workspace and _G.workspace.workspace and _G.workspace.workspace.workspaceFolders then
+        local ws = _G.workspace.workspace
         if ws.workspaceFile or #ws.workspaceFolders > 1 then
           local paths = {}
           for _, folder in ipairs(ws.workspaceFolders) do
@@ -34,7 +34,7 @@ local function hijack_telescope(builtin)
     local orig_git_files = builtin.git_files
     builtin.git_files = function(opts)
       opts = opts or {}
-      if _G.vscode and _G.vscode.workspace and (_G.vscode.workspace.workspaceFile or #_G.vscode.workspace.workspaceFolders > 1) then
+      if _G.workspace and _G.workspace.workspace and (_G.workspace.workspace.workspaceFile or #_G.workspace.workspace.workspaceFolders > 1) then
         return builtin.find_files(opts)
       end
       return orig_git_files(opts)
@@ -43,14 +43,14 @@ local function hijack_telescope(builtin)
 end
 
 local function hijack_fzf_lua(fzf)
-  if fzf._vscode_hijacked then return end
-  fzf._vscode_hijacked = true
+  if fzf._workspace_hijacked then return end
+  fzf._workspace_hijacked = true
 
   local function wrap_fzf(orig_func)
     return function(opts)
       opts = opts or {}
-      if _G.vscode and _G.vscode.workspace and _G.vscode.workspace.workspaceFolders then
-        local ws = _G.vscode.workspace
+      if _G.workspace and _G.workspace.workspace and _G.workspace.workspace.workspaceFolders then
+        local ws = _G.workspace.workspace
         if ws.workspaceFile or #ws.workspaceFolders > 1 then
           if ws.virtualRoot then
             opts.cwd = opts.cwd or ws.virtualRoot
@@ -76,14 +76,14 @@ local function hijack_fzf_lua(fzf)
 end
 
 local function hijack_snacks_picker(picker)
-  if picker._vscode_hijacked then return end
-  picker._vscode_hijacked = true
+  if picker._workspace_hijacked then return end
+  picker._workspace_hijacked = true
 
   local function wrap_snacks(orig_func)
     return function(opts)
       opts = opts or {}
-      if _G.vscode and _G.vscode.workspace and _G.vscode.workspace.workspaceFolders then
-        local ws = _G.vscode.workspace
+      if _G.workspace and _G.workspace.workspace and _G.workspace.workspace.workspaceFolders then
+        local ws = _G.workspace.workspace
         if ws.workspaceFile or #ws.workspaceFolders > 1 then
           local paths = {}
           for _, folder in ipairs(ws.workspaceFolders) do
@@ -105,7 +105,7 @@ local function hijack_snacks_picker(picker)
 end
 
 function M.setup()
-  if not _G.vscode_config or _G.vscode_config.hijack_search == false then
+  if not _G.workspace_config or _G.workspace_config.hijack_search == false then
     return
   end
 
