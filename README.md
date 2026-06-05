@@ -168,6 +168,7 @@ When calling `setup()`, you can customize:
 | `terminal_position` | `string` | `"horizontal"` | Position layout for terminal splits (`"horizontal"`, `"vertical"`, `"tab"`, `"float"`). |
 | `terminal_size` | `number` | `15` | Default height (horizontal split) or width (vertical split) of the terminal. |
 | `auto_lsp` | `boolean` | `true` | Automatically calls `vim.lsp.buf.add_workspace_folder` for all loaded folders on LSP client attach. |
+| `hijack_search` | `boolean` | `true` | Intercepts Telescope, Fzf-lua, and Snacks.picker calls to automatically search all workspace folders. |
 
 ---
 
