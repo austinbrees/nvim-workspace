@@ -188,8 +188,14 @@ end, {
 vim.api.nvim_create_user_command("WorkspaceAddFolder", function(opts)
   local path = opts.args
   if not path or path == "" then
-    path = vim.fn.getcwd()
+    path = vim.fn.input("Folder to add: ", "", "dir")
+    if not path or path == "" then
+      vim.notify("Add folder canceled.", vim.log.levels.INFO)
+      return
+    end
   end
+
+  path = vim.fn.resolve(vim.fn.expand(path))
   local success = _G.workspace.workspace.addFolder(path)
   if success then
     local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
