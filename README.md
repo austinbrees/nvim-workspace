@@ -41,7 +41,7 @@
 | Command | Description |
 |---|---|
 | `:WorkspaceOpen [path]` | Opens a workspace file. If no path is provided, walks up from CWD to find a `.code-workspace` file, otherwise falling back to recent history. |
-| `:WorkspaceAddFolder [dir]` | Adds a folder path to the active workspace. If currently in single-root CWD mode, enters a transient (untitled) workspace. |
+| `:WorkspaceAddFolder [dir]` | Adds a folder path to the active workspace. If no path is provided, prompts the user to select/type a folder path using autocomplete. If currently in single-root CWD mode, enters a transient (untitled) workspace. |
 | `:WorkspaceSaveAs [path]` | Saves the active workspace configuration to a `.code-workspace` file. |
 | `:WorkspaceClose` | Closes the active workspace, resetting folders back to Neovim CWD. |
 | `:WorkspaceExplorer` | Opens/switches your file explorer (e.g. Neo-tree, falling back to Netrw) to the virtual workspace root folder. |
