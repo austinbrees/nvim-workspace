@@ -255,12 +255,125 @@ local function prompt_add_folder()
     end
   end
   
+  -- macOS native file dialog choice
+  local is_mac = vim.fn.has("mac") == 1 or vim.fn.has("macunix") == 1
+  if is_mac then
+    local label = "Browse folders via macOS File Dialog..."
+    table.insert(choices, label)
+    choice_actions[label] = function()
+      local stdout = {}
+      vim.fn.jobstart({ "osascript", "-e", "POSIX path of (choose folder with prompt \"Select Folder to Add\")" }, {
+        stdout_buffered = true,
+        on_stdout = function(_, data)
+          if data then
+            for _, line in ipairs(data) do
+              if line ~= "" then
+                table.insert(stdout, line)
+              end
+            end
+          end
+        end,
+        on_exit = function(_, exit_code)
+          if exit_code == 0 and #stdout > 0 then
+            local path = table.concat(stdout, "\n")
+            path = path:gsub("%s+$", "")
+            if path:sub(-1) == "/" or path:sub(-1) == "\\" then
+              path = path:sub(1, -2)
+            end
+            path = vim.fn.resolve(vim.fn.expand(path))
+            local success = _G.workspace.workspace.addFolder(path)
+            if success then
+              local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
+              vim.notify(string.format("Added folder to %s: %s", state_str, path), vim.log.levels.INFO)
+            else
+              vim.notify("Failed to add folder: " .. path, vim.log.levels.ERROR)
+            end
+          else
+            vim.notify("Add folder canceled.", vim.log.levels.INFO)
+          end
+        end
+      })
+    end
+  end
+  
   -- 2. Telescope fuzzy finder choice (if Telescope is installed)
   local has_telescope = pcall(require, "telescope")
   if has_telescope then
-    local label = "Fuzzy find folder to add (Telescope)..."
-    table.insert(choices, label)
-    choice_actions[label] = function()
+    local label_nav = "Browse folders (Telescope, navigate filesystem)..."
+    table.insert(choices, label_nav)
+    choice_actions[label_nav] = function()
+      local ok, pickers = pcall(require, "telescope.pickers")
+      if not ok then return end
+      local finders = require("telescope.finders")
+      local conf = require("telescope.config").values
+      local actions = require("telescope.actions")
+      local action_state = require("telescope.actions.state")
+      
+      local function run_picker(path)
+        path = vim.fn.resolve(vim.fn.expand(path))
+        
+        local dirs = {
+          "[Select current: " .. path .. "]",
+          "../ (Go up)"
+        }
+        
+        local uv = vim.uv or vim.loop
+        local handle = uv.fs_scandir(path)
+        if handle then
+          local subdirs = {}
+          while true do
+            local name, type = uv.fs_scandir_next(handle)
+            if not name then break end
+            if type == "directory" and name:sub(1, 1) ~= "." then
+              table.insert(subdirs, name .. "/")
+            end
+          end
+          table.sort(subdirs)
+          for _, sd in ipairs(subdirs) do
+            table.insert(dirs, sd)
+          end
+        end
+        
+        pickers.new({}, {
+          prompt_title = "Browse: " .. path,
+          finder = finders.new_table({
+            results = dirs
+          }),
+          sorter = conf.generic_sorter({}),
+          attach_mappings = function(prompt_bufnr, map)
+            actions.select_default:replace(function()
+              local selection = action_state.get_selected_entry()
+              actions.close(prompt_bufnr)
+              if selection then
+                local chosen = selection[1]
+                if chosen:sub(1, 15) == "[Select current" then
+                  local success = _G.workspace.workspace.addFolder(path)
+                  if success then
+                    local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
+                    vim.notify(string.format("Added folder to %s: %s", state_str, path), vim.log.levels.INFO)
+                  else
+                    vim.notify("Failed to add folder: " .. path, vim.log.levels.ERROR)
+                  end
+                elseif chosen == "../ (Go up)" then
+                  local parent_path = vim.fn.fnamemodify(path, ":h")
+                  run_picker(parent_path)
+                else
+                  local target_path = path .. "/" .. chosen:sub(1, -2)
+                  run_picker(target_path)
+                end
+              end
+            end)
+            return true
+          end,
+        }):find()
+      end
+      
+      run_picker(vim.fn.getcwd())
+    end
+
+    local label_find = "Fuzzy find folder to add (Telescope, recursive search)..."
+    table.insert(choices, label_find)
+    choice_actions[label_find] = function()
       local ok, builtin = pcall(require, "telescope.builtin")
       if not ok then return end
       
