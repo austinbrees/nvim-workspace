@@ -45,6 +45,30 @@ local function sync_lsp_folders(bufnr)
   end)
 end
 
+-- Refresh File Explorer helper if active
+local function refresh_explorer()
+  local ws = _G.workspace.workspace
+  if not ws.virtualRoot then
+    return
+  end
+  
+  -- Check if Neo-tree is open in current tab page
+  local neotree_open = false
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.api.nvim_win_is_valid(win) then
+      local buf = vim.api.nvim_win_get_buf(win)
+      if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == "neo-tree" then
+        neotree_open = true
+        break
+      end
+    end
+  end
+  
+  if neotree_open then
+    vim.cmd("Neotree dir=" .. vim.fn.fnameescape(ws.virtualRoot))
+  end
+end
+
 -- Load Workspace function
 local function load_workspace(path)
   local ws = _G.workspace.workspace
@@ -62,6 +86,7 @@ local function load_workspace(path)
           sync_lsp_folders(bufnr)
         end
       end
+      refresh_explorer()
     else
       vim.notify("Failed to load workspace: " .. tostring(err), vim.log.levels.ERROR)
     end
@@ -128,6 +153,7 @@ local function open_workspace(path)
           sync_lsp_folders(bufnr)
         end
       end
+      refresh_explorer()
     else
       vim.notify("Failed to open workspace: " .. tostring(err), vim.log.levels.ERROR)
     end
@@ -249,6 +275,7 @@ local function prompt_add_folder()
       if success then
         local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
         vim.notify(string.format("Added folder to %s: %s", state_str, detected_dir), vim.log.levels.INFO)
+        refresh_explorer()
       else
         vim.notify("Failed to add folder: " .. detected_dir, vim.log.levels.ERROR)
       end
@@ -285,6 +312,7 @@ local function prompt_add_folder()
             if success then
               local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
               vim.notify(string.format("Added folder to %s: %s", state_str, path), vim.log.levels.INFO)
+              refresh_explorer()
             else
               vim.notify("Failed to add folder: " .. path, vim.log.levels.ERROR)
             end
@@ -351,6 +379,7 @@ local function prompt_add_folder()
                   if success then
                     local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
                     vim.notify(string.format("Added folder to %s: %s", state_str, path), vim.log.levels.INFO)
+                    refresh_explorer()
                   else
                     vim.notify("Failed to add folder: " .. path, vim.log.levels.ERROR)
                   end
@@ -395,6 +424,7 @@ local function prompt_add_folder()
               if success then
                 local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
                 vim.notify(string.format("Added folder to %s: %s", state_str, abs_path), vim.log.levels.INFO)
+                refresh_explorer()
               else
                 vim.notify("Failed to add folder: " .. abs_path, vim.log.levels.ERROR)
               end
@@ -426,6 +456,7 @@ local function prompt_add_folder()
     if success then
       local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
       vim.notify(string.format("Added folder to %s: %s", state_str, path), vim.log.levels.INFO)
+      refresh_explorer()
     else
       vim.notify("Failed to add folder: " .. path, vim.log.levels.ERROR)
     end
@@ -451,6 +482,7 @@ vim.api.nvim_create_user_command("WorkspaceAddFolder", function(opts)
     if success then
       local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
       vim.notify(string.format("Added folder to %s: %s", state_str, path), vim.log.levels.INFO)
+      refresh_explorer()
     else
       vim.notify("Failed to add folder: " .. path, vim.log.levels.ERROR)
     end
@@ -505,7 +537,7 @@ vim.api.nvim_create_user_command("WorkspaceExplorer", function()
 
   -- Prioritize the virtualRoot directory (containing symlinks to all folders)
   -- so that any file explorer will display them side-by-side!
-  if ws.workspaceFile and ws.virtualRoot then
+  if ws.virtualRoot then
     open_explorer(ws.virtualRoot)
   elseif #folders == 1 then
     open_explorer(folders[1].uri.fsPath)
