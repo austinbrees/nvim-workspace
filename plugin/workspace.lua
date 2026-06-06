@@ -185,23 +185,162 @@ end, {
 })
 
 -- Add Folder Command (Transition to workspace mode if not already)
-vim.api.nvim_create_user_command("WorkspaceAddFolder", function(opts)
-  local path = opts.args
-  if not path or path == "" then
-    path = vim.fn.input("Folder to add: ", "", "dir")
+local function prompt_add_folder()
+  local choices = {}
+  local choice_actions = {}
+  
+  -- 1. Check if we can detect a directory from the active buffer/explorer
+  local current_file = vim.api.nvim_buf_get_name(0)
+  local detected_dir = nil
+  
+  if vim.bo.filetype == "netrw" then
+    local curdir = vim.b.netrw_curdir
+    local cfile = vim.fn.expand("<cfile>")
+    if curdir then
+      if cfile and cfile ~= "" then
+        local full_path = curdir .. "/" .. cfile
+        if vim.fn.isdirectory(full_path) == 1 then
+          detected_dir = full_path
+        else
+          detected_dir = curdir
+        end
+      else
+        detected_dir = curdir
+      end
+    end
+  elseif vim.bo.filetype == "neo-tree" then
+    local ok_neotree, neotree_manager = pcall(require, "neo-tree.sources.manager")
+    if ok_neotree then
+      local state = neotree_manager.get_state("filesystem")
+      if state and state.tree then
+        local node = state.tree:get_node()
+        if node then
+          if node.type == "directory" then
+            detected_dir = node.path
+          else
+            detected_dir = vim.fn.fnamemodify(node.path, ":h")
+          end
+        end
+      end
+    end
+  elseif vim.bo.filetype == "oil" then
+    local ok_oil, oil = pcall(require, "oil")
+    if ok_oil then
+      local entry = oil.get_cursor_entry()
+      local current_oil_dir = oil.get_current_dir()
+      if current_oil_dir then
+        if entry and entry.type == "directory" then
+          detected_dir = current_oil_dir .. entry.name
+        else
+          detected_dir = current_oil_dir
+        end
+      end
+    end
+  elseif current_file ~= "" and vim.bo.buftype == "" then
+    detected_dir = vim.fn.fnamemodify(current_file, ":h")
+  end
+  
+  if detected_dir then
+    detected_dir = vim.fn.resolve(vim.fn.expand(detected_dir))
+    local label = string.format("Add active folder: %s", detected_dir)
+    table.insert(choices, label)
+    choice_actions[label] = function()
+      local success = _G.workspace.workspace.addFolder(detected_dir)
+      if success then
+        local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
+        vim.notify(string.format("Added folder to %s: %s", state_str, detected_dir), vim.log.levels.INFO)
+      else
+        vim.notify("Failed to add folder: " .. detected_dir, vim.log.levels.ERROR)
+      end
+    end
+  end
+  
+  -- 2. Telescope fuzzy finder choice (if Telescope is installed)
+  local has_telescope = pcall(require, "telescope")
+  if has_telescope then
+    local label = "Fuzzy find folder to add (Telescope)..."
+    table.insert(choices, label)
+    choice_actions[label] = function()
+      local ok, builtin = pcall(require, "telescope.builtin")
+      if not ok then return end
+      
+      local search_root = vim.fn.fnamemodify(vim.fn.getcwd(), ":h")
+      local opts = {
+        prompt_title = "Select Folder to Add",
+        cwd = search_root,
+        find_command = { "fd", "--type", "d", "--hidden", "--exclude", ".git", "--max-depth", "4" },
+        attach_mappings = function(prompt_bufnr, map)
+          local actions = require("telescope.actions")
+          local action_state = require("telescope.actions.state")
+          
+          actions.select_default:replace(function()
+            actions.close(prompt_bufnr)
+            local selection = action_state.get_selected_entry()
+            if selection and selection[1] then
+              local abs_path = vim.fn.resolve(search_root .. "/" .. selection[1])
+              local success = _G.workspace.workspace.addFolder(abs_path)
+              if success then
+                local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
+                vim.notify(string.format("Added folder to %s: %s", state_str, abs_path), vim.log.levels.INFO)
+              else
+                vim.notify("Failed to add folder: " .. abs_path, vim.log.levels.ERROR)
+              end
+            end
+          end)
+          return true
+        end
+      }
+      
+      if vim.fn.executable("fd") == 0 then
+        opts.find_command = { "find", ".", "-type", "d", "-not", "-path", "*/.*", "-maxdepth", "4" }
+      end
+      
+      builtin.find_files(opts)
+    end
+  end
+  
+  -- 3. Manual entry choice
+  local manual_label = "Type folder path manually..."
+  table.insert(choices, manual_label)
+  choice_actions[manual_label] = function()
+    local path = vim.fn.input("Folder to add: ", "", "dir")
     if not path or path == "" then
       vim.notify("Add folder canceled.", vim.log.levels.INFO)
       return
     end
+    path = vim.fn.resolve(vim.fn.expand(path))
+    local success = _G.workspace.workspace.addFolder(path)
+    if success then
+      local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
+      vim.notify(string.format("Added folder to %s: %s", state_str, path), vim.log.levels.INFO)
+    else
+      vim.notify("Failed to add folder: " .. path, vim.log.levels.ERROR)
+    end
   end
+  
+  -- Show selector
+  vim.ui.select(choices, {
+    prompt = "Select how to add a folder to the workspace",
+  }, function(choice)
+    if choice and choice_actions[choice] then
+      choice_actions[choice]()
+    end
+  end)
+end
 
-  path = vim.fn.resolve(vim.fn.expand(path))
-  local success = _G.workspace.workspace.addFolder(path)
-  if success then
-    local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
-    vim.notify(string.format("Added folder to %s: %s", state_str, path), vim.log.levels.INFO)
+vim.api.nvim_create_user_command("WorkspaceAddFolder", function(opts)
+  local path = opts.args
+  if not path or path == "" then
+    prompt_add_folder()
   else
-    vim.notify("Failed to add folder: " .. path, vim.log.levels.ERROR)
+    path = vim.fn.resolve(vim.fn.expand(path))
+    local success = _G.workspace.workspace.addFolder(path)
+    if success then
+      local state_str = _G.workspace.workspace.workspaceFile and "workspace config" or "untitled workspace"
+      vim.notify(string.format("Added folder to %s: %s", state_str, path), vim.log.levels.INFO)
+    else
+      vim.notify("Failed to add folder: " .. path, vim.log.levels.ERROR)
+    end
   end
 end, {
   nargs = "?",
